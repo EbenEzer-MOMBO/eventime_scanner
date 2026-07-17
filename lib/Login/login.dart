@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Events/page_acceuil.dart';
 import '../config/api_config.dart';
+import '../config/branding.dart';
+import '../services/branding_service.dart';
 
 class Connexion extends StatefulWidget {
   const Connexion({super.key});
@@ -17,11 +19,23 @@ TextEditingController passe = TextEditingController();
 
 class _ConnexionState extends State<Connexion> {
   bool chargement = false;
+  String logoDark = Branding.fallbackLogoDark;
+  String logoLight = Branding.fallbackLogoLight;
 
   @override
   void initState() {
     super.initState();
+    _loadBranding();
     _checkSavedCredentials();
+  }
+
+  Future<void> _loadBranding() async {
+    final assets = await BrandingService.fetch();
+    if (!mounted) return;
+    setState(() {
+      logoDark = assets.logoDark;
+      logoLight = assets.logoLight;
+    });
   }
 
   Future<void> _checkSavedCredentials() async {
@@ -156,13 +170,15 @@ class _ConnexionState extends State<Connexion> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
+                    SizedBox(
                       width: MediaQuery.of(context).size.width / 1.3,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        image: const DecorationImage(
-                          image: AssetImage('assets/logo-eventime-noel-alt.png'),
+                      height: 56,
+                      child: Image.network(
+                        logoDark,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.image_not_supported,
+                          color: Colors.grey,
                         ),
                       ),
                     ),
@@ -256,18 +272,16 @@ class _ConnexionState extends State<Connexion> {
             ),
           ),
           Positioned(
-            left: 150,
-            right: 150,
+            left: 80,
+            right: 80,
             top: MediaQuery.of(context).size.height / 1.2,
-            bottom: 0,
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                image: const DecorationImage(
-                  image: AssetImage('assets/icone_eventime_light.png'),
-                ),
+            bottom: 16,
+            child: Center(
+              child: Image.network(
+                logoLight,
+                height: 48,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
             ),
           ),

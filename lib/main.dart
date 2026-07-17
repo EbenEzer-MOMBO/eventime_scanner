@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Eventime scan',
+      title: 'Eventime Scan',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
@@ -122,7 +122,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
         nom_agent: widget.nom_agent!,
         matricule_agent: widget.matricule_agent!,
         id_agent: widget.id_agent!,
-      );
+      ); 
     }
     return const Connexion();
   }

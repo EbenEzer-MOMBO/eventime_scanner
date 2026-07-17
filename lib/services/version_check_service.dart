@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import '../config/api_config.dart';
@@ -39,10 +40,9 @@ class VersionCheckResult {
 }
 
 class VersionCheckService {
-  /// Si l'API est indisponible : pas de blocage (updateRequired = false).
+  /// Si l'API / le plugin est indisponible : pas de blocage.
   static Future<VersionCheckResult> check() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    final localBuild = int.tryParse(packageInfo.buildNumber) ?? 0;
+    final localBuild = await _localBuildNumber();
 
     try {
       final response = await http
@@ -69,7 +69,9 @@ class VersionCheckService {
       );
 
       final outdated =
-          remote.versionCode > 0 && localBuild < remote.versionCode;
+          localBuild > 0 &&
+          remote.versionCode > 0 &&
+          localBuild < remote.versionCode;
 
       return VersionCheckResult(
         updateRequired: outdated,
@@ -81,6 +83,18 @@ class VersionCheckService {
         updateRequired: false,
         localBuildNumber: localBuild,
       );
+    }
+  }
+
+  static Future<int> _localBuildNumber() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      return int.tryParse(packageInfo.buildNumber) ?? 0;
+    } on MissingPluginException {
+      // Hot reload après ajout du plugin : rebuild complet requis.
+      return 0;
+    } catch (_) {
+      return 0;
     }
   }
 }

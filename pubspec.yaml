@@ -60,9 +60,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon/launcher_icon.png"
-  adaptive_icon_background: "#FFFFFF" # Couleur de fond pour les icônes adaptatives Android
-  adaptive_icon_foreground: "assets/icon/launcher_icon.png"
+  image_path: "assets/icon/launcher_icon_new2.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/launcher_icon_new2.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

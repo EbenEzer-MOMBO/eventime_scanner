@@ -278,6 +278,8 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
             ),
             child: TabBar(
               controller: _tabController,
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
               indicator: BoxDecoration(
                 borderRadius: BorderRadius.circular(25),
                 color: const Color(0xFF8BC34A),
@@ -356,9 +358,7 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
   bool condition(heureSpecifique, dureeEnHeures) {
     DateTime heureActuelle = DateTime.now();
     int minutes = (dureeEnHeures * 60).toInt();
-    DateTime heureLimite = heureSpecifique.subtract(
-      Duration(minutes: minutes),
-    );
+    DateTime heureLimite = heureSpecifique.subtract(Duration(minutes: minutes));
     return heureActuelle.isAfter(heureLimite) ||
         heureActuelle.isAtSameMomentAs(heureLimite);
   }
@@ -744,11 +744,13 @@ class ParticipantsContent extends StatelessWidget {
           ),
         ),
 
-        // Participants count header
+        // Compteur = count API (vendus), comme le scanner web.
+        // Le ratio n'apparaît qu'en recherche active.
         if (totalCount > 0)
           ParticipantsHeader(
-            count: participantsList.length,
             totalCount: totalCount,
+            filteredCount: participantsList.length,
+            isFiltered: searchController.text.trim().isNotEmpty,
           ),
 
         // Participants list
@@ -786,8 +788,7 @@ class ParticipantsContent extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               // Scroll infini : boucle sur la liste actuelle
               itemBuilder: (context, index) {
-                final item =
-                    participantsList[index % participantsList.length];
+                final item = participantsList[index % participantsList.length];
                 return ParticipantCard(participant: item);
               },
             ),
@@ -798,15 +799,19 @@ class ParticipantsContent extends StatelessWidget {
 }
 
 class ParticipantsHeader extends StatelessWidget {
-  final int count;
-  final int? totalCount;
+  final int totalCount;
+  final int filteredCount;
+  final bool isFiltered;
 
-  const ParticipantsHeader({super.key, required this.count, this.totalCount});
+  const ParticipantsHeader({
+    super.key,
+    required this.totalCount,
+    required this.filteredCount,
+    this.isFiltered = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    bool isFiltered = totalCount != null && count != totalCount;
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -842,9 +847,7 @@ class ParticipantsHeader extends StatelessWidget {
             Column(
               children: [
                 Text(
-                  isFiltered
-                      ? '$count / $totalCount'
-                      : '${totalCount ?? count}',
+                  isFiltered ? '$filteredCount' : '$totalCount',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -853,10 +856,10 @@ class ParticipantsHeader extends StatelessWidget {
                 ),
                 Text(
                   isFiltered
-                      ? 'Résultats trouvés'
-                      : ((totalCount ?? count) > 1
-                          ? 'Participants'
-                          : 'Participant'),
+                      ? (filteredCount > 1
+                          ? 'Résultats trouvés'
+                          : 'Résultat trouvé')
+                      : (totalCount > 1 ? 'Participants' : 'Participant'),
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white,
