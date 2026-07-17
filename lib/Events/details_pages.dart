@@ -20,6 +20,7 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<Map<String, dynamic>> participantsList = [];
   List<Map<String, dynamic>> filteredParticipantsList = [];
+  int participantsCount = 0; // vendus = initial - remaining (API count)
   bool isLoadingParticipants = false;
   TextEditingController searchController = TextEditingController();
   Timer? _softFetchTimer;
@@ -121,8 +122,14 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
             var data = jsonResponse['data'];
             if (data is List) {
               final list = List<Map<String, dynamic>>.from(data);
+              final apiCount = jsonResponse['count'];
               setState(() {
                 participantsList = list;
+                participantsCount =
+                    apiCount is int
+                        ? apiCount
+                        : int.tryParse(apiCount?.toString() ?? '') ??
+                            list.length;
                 isLoadingParticipants = false;
               });
               _filterParticipants();
@@ -139,6 +146,7 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
       setState(() {
         participantsList = [];
         filteredParticipantsList = [];
+        participantsCount = 0;
         isLoadingParticipants = false;
       });
     } else {
@@ -301,7 +309,7 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
                   participantsList: filteredParticipantsList,
                   isLoading: isLoadingParticipants,
                   searchController: searchController,
-                  totalCount: participantsList.length,
+                  totalCount: participantsCount,
                 ),
               ],
             ),
@@ -834,7 +842,9 @@ class ParticipantsHeader extends StatelessWidget {
             Column(
               children: [
                 Text(
-                  isFiltered ? '$count / $totalCount' : '$count',
+                  isFiltered
+                      ? '$count / $totalCount'
+                      : '${totalCount ?? count}',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -844,7 +854,9 @@ class ParticipantsHeader extends StatelessWidget {
                 Text(
                   isFiltered
                       ? 'Résultats trouvés'
-                      : (count > 1 ? 'Participants' : 'Participant'),
+                      : ((totalCount ?? count) > 1
+                          ? 'Participants'
+                          : 'Participant'),
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white,
@@ -957,7 +969,6 @@ class ParticipantCard extends StatelessWidget {
                             fontSize: 12,
                             color: Colors.black87,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -965,6 +976,7 @@ class ParticipantCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   // Billet avec icône
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.confirmation_number,
@@ -980,7 +992,6 @@ class ParticipantCard extends StatelessWidget {
                             color: Colors.grey[700],
                             fontWeight: FontWeight.w500,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -988,6 +999,7 @@ class ParticipantCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   // Email avec icône
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.email_outlined,
@@ -1003,7 +1015,6 @@ class ParticipantCard extends StatelessWidget {
                             fontSize: 12,
                             color: Colors.grey[700],
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -1011,6 +1022,7 @@ class ParticipantCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   // Acheteur avec icône
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.shopping_cart_outlined,
@@ -1025,7 +1037,6 @@ class ParticipantCard extends StatelessWidget {
                             fontSize: 12,
                             color: Colors.grey[700],
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
