@@ -1,9 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Login/login.dart';
+import '../config/api_config.dart';
 
 import 'details_pages.dart';
 import 'widgets/user_header.dart';
@@ -23,10 +23,6 @@ class page_acceuil extends StatefulWidget {
   @override
   State<page_acceuil> createState() => _page_acceuilState();
 }
-
-var based_url = 'https://eventime.ga/api/spb_index.php';
-var events_api_url = 'https://eventime.ga/api/mobile/events-avenir';
-var events_en_cours_api_url = 'https://eventime.ga/api/mobile/events-en-cours';
 
 class _page_acceuilState extends State<page_acceuil> {
   String id_evenement_en_cours = "";
@@ -62,8 +58,9 @@ class _page_acceuilState extends State<page_acceuil> {
   Future<List<Map<String, dynamic>>> fetchEvents(String idAgent) async {
     try {
       final response = await http.post(
-        Uri.parse(events_api_url),
-        body: {'id_agent': idAgent.toString()},
+        Uri.parse(ApiConfig.eventsAvenir),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_agent': idAgent.toString()}),
       );
 
       if (response.statusCode == 200) {
@@ -109,29 +106,28 @@ class _page_acceuilState extends State<page_acceuil> {
   }
 
   void Evenements_en_cours(String idAgent) async {
-    final uri = Uri.parse(events_en_cours_api_url);
+    final uri = Uri.parse(ApiConfig.eventsEnCours);
 
     try {
-      var response = await http.post(uri, body: {'id_agent': idAgent});
+      var response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_agent': idAgent}),
+      );
 
       if (response.statusCode == 200) {
-        // Vérifier si la réponse est vide
         String responseBody = response.body.trim();
         if (responseBody.isEmpty) {
           return;
         }
 
         try {
-          // Convertir la réponse JSON
           Map<String, dynamic> jsonResponse = json.decode(responseBody);
 
-          // Vérifier le statut de succès
           if (jsonResponse['success'] == true) {
             var data = jsonResponse['data'];
 
-            // Vérifier si des événements en cours existent
             if (data is List && data.isNotEmpty) {
-              // Prendre le premier événement en cours
               var eventData = data[0];
 
               bool newEvent =
@@ -143,26 +139,18 @@ class _page_acceuilState extends State<page_acceuil> {
                 nom_evenement_en_cours = eventData['title'].toString();
                 description_evenement_en_cours =
                     eventData['description'] ?? "Aucune description disponible";
-
-                // Si c'est un nouvel événement, charger immédiatement les données de billets
-                if (newEvent) {
-                  Tk_Restant(id_evenement_en_cours);
-                  Participant(id_evenement_en_cours);
-                }
               });
 
-              // Afficher un message de succès seulement si c'est un nouvel événement
               if (newEvent) {
+                fetchEventStats(id_evenement_en_cours);
                 snackbar("Événement en cours: $nom_evenement_en_cours");
               }
             } else {
-              // Aucun événement en cours
               setState(() {
                 id_evenement_en_cours = "";
               });
             }
           } else {
-            // Aucun événement en cours
             setState(() {
               id_evenement_en_cours = "";
             });
@@ -171,65 +159,43 @@ class _page_acceuilState extends State<page_acceuil> {
           snackbar("Erreur de format de données: $e");
         }
       } else {
-        // Gérer les erreurs HTTP
         snackbar("Erreur: ${response.statusCode}");
       }
     } catch (e) {
-      // Gérer les exceptions
       snackbar("Erreur: $e");
     }
   }
 
-  Future Tk_Restant(idEvent) async {
+  /// Stats alignées dashboard : participants = vendus, remaining = non scannés.
+  Future<void> fetchEventStats(idEvent) async {
     try {
-      final uri = Uri.parse(based_url);
+      final uri = Uri.parse(ApiConfig.eventStats);
       var response = await http.post(
         uri,
-        body: {'clic': 'nb_ticket_restant', 'id_event': idEvent.toString()},
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'event_id': idEvent.toString()}),
       );
 
-      // Vérifier si la réponse est valide
       if (response.statusCode == 200) {
-        String responseBody = response.body.trim();
-
-        // Vérifier si la réponse n'est pas vide
-        if (responseBody.isNotEmpty && responseBody != "non") {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
           setState(() {
-            tk_restant = responseBody;
+            participant = data['data']['participants']?.toString() ?? '0';
+            tk_restant = data['data']['remaining']?.toString() ?? '0';
           });
-        } else {
-          setState(() {
-            tk_restant = "0";
-          });
+          return;
         }
-      } else {}
-    } catch (e) {}
-  }
-
-  Future Participant(idEvent) async {
-    try {
-      final uri = Uri.parse(based_url);
-      var response = await http.post(
-        uri,
-        body: {'clic': 'nb_ticket_update', 'id_event': idEvent.toString()},
-      );
-
-      // Vérifier si la réponse est valide
-      if (response.statusCode == 200) {
-        String responseBody = response.body.trim();
-
-        // Vérifier si la réponse n'est pas vide
-        if (responseBody.isNotEmpty && responseBody != "non") {
-          setState(() {
-            participant = responseBody;
-          });
-        } else {
-          setState(() {
-            participant = "0";
-          });
-        }
-      } else {}
-    } catch (e) {}
+      }
+      setState(() {
+        participant = '0';
+        tk_restant = '0';
+      });
+    } catch (e) {
+      setState(() {
+        participant = '0';
+        tk_restant = '0';
+      });
+    }
   }
 
   Future<void> fetchData() async {
@@ -361,10 +327,8 @@ class _page_acceuilState extends State<page_acceuil> {
     // Vérifier l'événement en cours
     Evenements_en_cours(widget.id_agent.toString());
 
-    // Mettre à jour les statistiques de billets si un événement est en cours
     if (id_evenement_en_cours.isNotEmpty) {
-      Tk_Restant(id_evenement_en_cours);
-      Participant(id_evenement_en_cours);
+      fetchEventStats(id_evenement_en_cours);
     }
   }
 }

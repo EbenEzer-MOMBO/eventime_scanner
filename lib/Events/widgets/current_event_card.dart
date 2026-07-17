@@ -183,7 +183,7 @@ class CurrentEventCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _buildStatsCard(
-                        'Tickets restant',
+                        'Non scannés',
                         tkRestant,
                         size,
                         Icons.confirmation_number,

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../Scanner/Scanne_pages.dart';
+import '../config/api_config.dart';
 
 class Details extends StatefulWidget {
   var Plus;
@@ -14,25 +16,39 @@ class Details extends StatefulWidget {
 
 class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
   var participant = "0";
-  var based_url = 'http://eventime.ga/api/spb_index.php';
-  var participants_api_url = 'https://eventime.ga/api/mobile/participants-list';
 
   late TabController _tabController;
   List<Map<String, dynamic>> participantsList = [];
   List<Map<String, dynamic>> filteredParticipantsList = [];
   bool isLoadingParticipants = false;
   TextEditingController searchController = TextEditingController();
+  Timer? _softFetchTimer;
 
-  Future Evenements(String idEvent) async {
-    final uri = Uri.parse(based_url);
-    var reponse = await http.post(
-      uri,
-      body: {'clic': 'nb_ticket', 'id_event': idEvent},
-    );
-    print(reponse.body);
-    setState(() {
-      participant = reponse.body;
-    });
+  Future<void> fetchEventStats(String idEvent) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.eventStats),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'event_id': idEvent}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          setState(() {
+            participant = data['data']['participants']?.toString() ?? '0';
+          });
+          return;
+        }
+      }
+      setState(() {
+        participant = '0';
+      });
+    } catch (_) {
+      setState(() {
+        participant = '0';
+      });
+    }
   }
 
   @override
@@ -40,17 +56,21 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
-    // S'assurer que event_id est traité comme String
     String eventId = widget.Plus['event_id'].toString();
-    Evenements(eventId);
+    fetchEventStats(eventId);
     fetchParticipants(eventId);
 
-    // Écouter les changements de recherche
     searchController.addListener(_filterParticipants);
+
+    _softFetchTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+      fetchParticipants(eventId, soft: true);
+      fetchEventStats(eventId);
+    });
   }
 
   @override
   void dispose() {
+    _softFetchTimer?.cancel();
     _tabController.dispose();
     searchController.dispose();
     super.dispose();
@@ -79,15 +99,18 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
     });
   }
 
-  Future<void> fetchParticipants(String eventId) async {
-    setState(() {
-      isLoadingParticipants = true;
-    });
+  Future<void> fetchParticipants(String eventId, {bool soft = false}) async {
+    if (!soft || participantsList.isEmpty) {
+      setState(() {
+        isLoadingParticipants = true;
+      });
+    }
 
     try {
       final response = await http.post(
-        Uri.parse(participants_api_url),
-        body: {'event_id': eventId},
+        Uri.parse(ApiConfig.participantsList),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'event_id': eventId}),
       );
 
       if (response.statusCode == 200) {
@@ -97,11 +120,12 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
           if (jsonResponse['success'] == true) {
             var data = jsonResponse['data'];
             if (data is List) {
+              final list = List<Map<String, dynamic>>.from(data);
               setState(() {
-                participantsList = List<Map<String, dynamic>>.from(data);
-                filteredParticipantsList = participantsList;
+                participantsList = list;
                 isLoadingParticipants = false;
               });
+              _filterParticipants();
               return;
             }
           }
@@ -111,11 +135,17 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
       print("Erreur lors du chargement des participants: $e");
     }
 
-    setState(() {
-      participantsList = [];
-      filteredParticipantsList = [];
-      isLoadingParticipants = false;
-    });
+    if (!soft) {
+      setState(() {
+        participantsList = [];
+        filteredParticipantsList = [];
+        isLoadingParticipants = false;
+      });
+    } else {
+      setState(() {
+        isLoadingParticipants = false;
+      });
+    }
   }
 
   snackbar(text) {
@@ -746,9 +776,11 @@ class ParticipantsContent extends StatelessWidget {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: participantsList.length,
+              // Scroll infini : boucle sur la liste actuelle
               itemBuilder: (context, index) {
-                return ParticipantCard(participant: participantsList[index]);
+                final item =
+                    participantsList[index % participantsList.length];
+                return ParticipantCard(participant: item);
               },
             ),
           ),
@@ -848,7 +880,8 @@ class ParticipantCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isValidated = participant['status'] == 1;
+    final status = participant['status']?.toString();
+    final bool isValidated = status == '1' || status == 'scanned';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:eventime_scanner/Scanner/succes_pages.dart';
+import 'package:eventime_scanner/config/api_config.dart';
 
 class QRViewExample extends StatefulWidget {
   @override
@@ -120,7 +121,7 @@ class _QRViewExampleState extends State<QRViewExample> {
   Future<void> sendQRCodeData(numeroTicket) async {
     try {
       // Utiliser le nouvel endpoint API mobile pour le scan de tickets
-      final uri = Uri.parse("https://eventime.ga/api/mobile/scan-ticket");
+      final uri = Uri.parse(ApiConfig.scanTicket);
       
       // Préparer les données à envoyer
       final requestData = {

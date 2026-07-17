@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Events/page_acceuil.dart';
+import '../config/api_config.dart';
 
 class Connexion extends StatefulWidget {
   const Connexion({super.key});
@@ -28,10 +30,8 @@ class _ConnexionState extends State<Connexion> {
     final savedPassword = prefs.getString('saved_password');
 
     if (savedEmail != null && savedPassword != null) {
-      // Pré-remplir les champs avec les données sauvegardées
       email.text = savedEmail;
       passe.text = savedPassword;
-      // Se connecter automatiquement seulement si les données sont présentes
       _autoLogin(savedEmail, savedPassword);
     }
   }
@@ -66,69 +66,66 @@ class _ConnexionState extends State<Connexion> {
     });
 
     try {
-      // Utiliser HTTPS au lieu de HTTP pour la compatibilité avec le mode release
-      final uri = Uri.parse('https://eventime.ga/api/spb_index.php');
-
-      var reponse = await http
-          .post(
-            uri,
-            body: {'clic': 'con', 'matricule': email, 'code': password},
-          )
-          .timeout(const Duration(seconds: 15)); // Ajouter un timeout
-
-      print('Réponse du serveur: ${reponse.body}');
-
       if (email == '' || password == '') {
         snackbar('Les champs sont vide');
         setState(() {
           chargement = false;
         });
-      } else {
-        if (reponse.body == 'non') {
-          snackbar('Compte inconnu');
-          print('Compte inconnu');
-        } else if (reponse.body.contains(',')) {
-          print('Connexion réussie');
-          final datas = reponse.body.split(',');
-
-          if (datas.length >= 4) {
-            // Vérifier que nous avons assez de données
-            final SharedPreferences prefs =
-                await SharedPreferences.getInstance();
-            prefs.setString('id_agent', datas[0]);
-            prefs.setString('matricule_agent', datas[1]);
-            prefs.setString('id_org', datas[2]);
-            prefs.setString('nom_agent', datas[3]);
-
-            // Save login credentials
-            await _saveCredentials(email, password);
-
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder:
-                    (context) => page_acceuil(
-                      id_organisateur: datas[2],
-                      nom_agent: datas[3],
-                      matricule_agent: datas[1],
-                      id_agent: datas[0],
-                    ),
-              ),
-            );
-          } else {
-            snackbar('Format de réponse invalide');
-            print('Format de réponse invalide: ${reponse.body}');
-          }
-        } else {
-          snackbar('Erreur de connexion');
-          print('Réponse inattendue: ${reponse.body}');
-        }
-        setState(() {
-          chargement = false;
-        });
+        return;
       }
+
+      final uri = Uri.parse(ApiConfig.login);
+
+      var reponse = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'matricule': email, 'code': password}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (reponse.statusCode == 200) {
+        final data = json.decode(reponse.body);
+        if (data['success'] == true && data['data'] != null) {
+          final agent = data['data'] as Map<String, dynamic>;
+          final idAgent = agent['id_agent']?.toString() ?? '';
+          final matriculeAgent = agent['matricule']?.toString() ?? '';
+          final idOrg = agent['id_org']?.toString() ?? '';
+          final nomAgent = agent['nom_agent']?.toString() ?? '';
+
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          prefs.setString('id_agent', idAgent);
+          prefs.setString('matricule_agent', matriculeAgent);
+          prefs.setString('id_org', idOrg);
+          prefs.setString('nom_agent', nomAgent);
+
+          await _saveCredentials(email, password);
+
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => page_acceuil(
+                    id_organisateur: idOrg,
+                    nom_agent: nomAgent,
+                    matricule_agent: matriculeAgent,
+                    id_agent: idAgent,
+                  ),
+            ),
+          );
+        } else {
+          snackbar(data['message']?.toString() ?? 'Compte inconnu');
+        }
+      } else if (reponse.statusCode == 401) {
+        snackbar('Compte inconnu');
+      } else {
+        snackbar('Erreur de connexion');
+      }
+      setState(() {
+        chargement = false;
+      });
     } catch (e) {
-      print('Erreur lors de la connexion: $e');
       snackbar('Erreur de connexion: vérifiez votre connexion internet');
       setState(() {
         chargement = false;
@@ -178,7 +175,7 @@ class _ConnexionState extends State<Connexion> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: const Color.fromRGBO(125, 184, 78, 1),
-                        ), // Bordure personnalisée
+                        ),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.only(left: 19),
@@ -188,9 +185,7 @@ class _ConnexionState extends State<Connexion> {
                           decoration: const InputDecoration(
                             hintText: 'votre matricule',
                             hintStyle: TextStyle(color: Colors.grey),
-                            border:
-                                InputBorder
-                                    .none, // Retire la bordure décorative du TextField
+                            border: InputBorder.none,
                           ),
                         ),
                       ),
@@ -204,7 +199,7 @@ class _ConnexionState extends State<Connexion> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: const Color.fromRGBO(125, 184, 78, 1),
-                        ), // Bordure personnalisée
+                        ),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.only(left: 19),
@@ -215,9 +210,7 @@ class _ConnexionState extends State<Connexion> {
                           decoration: const InputDecoration(
                             hintText: 'votre mot de passe',
                             hintStyle: TextStyle(color: Colors.grey),
-                            border:
-                                InputBorder
-                                    .none, // Retire la bordure décorative du TextField
+                            border: InputBorder.none,
                           ),
                         ),
                       ),
@@ -235,7 +228,7 @@ class _ConnexionState extends State<Connexion> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: const Color.fromRGBO(125, 184, 78, 1),
-                          ), // Bordure personnalisée
+                          ),
                         ),
                         child: Center(
                           child:
