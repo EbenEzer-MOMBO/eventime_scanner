@@ -107,11 +107,21 @@ class _ConnexionState extends State<Connexion> {
           final idOrg = agent['id_org']?.toString() ?? '';
           final nomAgent = agent['nom_agent']?.toString() ?? '';
 
+          final token = agent['token']?.toString() ?? '';
+          if (token.isEmpty) {
+            snackbar('Token manquant — mettez à jour l\'application');
+            setState(() {
+              chargement = false;
+            });
+            return;
+          }
+
           final SharedPreferences prefs = await SharedPreferences.getInstance();
           prefs.setString('id_agent', idAgent);
           prefs.setString('matricule_agent', matriculeAgent);
           prefs.setString('id_org', idOrg);
           prefs.setString('nom_agent', nomAgent);
+          prefs.setString('access_token', token);
 
           await _saveCredentials(email, password);
 

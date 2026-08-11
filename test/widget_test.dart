@@ -1,9 +1,8 @@
-// This is a basic Flutter widget test.
+// Tests de demarrage de l'application.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// AppBootstrap effectue un controle de version reseau avant d'ouvrir le login
+// ou l'accueil : on verifie ici que MyApp se construit et affiche l'ecran de
+// demarrage, sans dependre de l'API.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,20 +10,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:eventime_scanner/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('MyApp se construit sans agent connecte',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp(isLoggedIn: false));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.byType(MaterialApp), findsOneWidget);
+    expect(find.byType(AppBootstrap), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('MyApp se construit avec un agent connecte',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp(
+      isLoggedIn: true,
+      id_agent: '1',
+      nom_agent: 'Agent',
+      matricule_agent: 'mat001',
+      id_org: '1',
+    ));
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.byType(AppBootstrap), findsOneWidget);
   });
 }

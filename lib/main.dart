@@ -9,13 +9,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final idAgent = prefs.getString('id_agent');
+  final accessToken = prefs.getString('access_token');
   final nomAgent = prefs.getString('nom_agent');
   final matriculeAgent = prefs.getString('matricule_agent');
   final idOrg = prefs.getString('id_org');
 
   runApp(
     MyApp(
-      isLoggedIn: idAgent != null,
+      isLoggedIn: idAgent != null && accessToken != null && accessToken.isNotEmpty,
       id_agent: idAgent,
       nom_agent: nomAgent,
       matricule_agent: matriculeAgent,

@@ -3,6 +3,7 @@ class ApiConfig {
   static const String baseUrl = 'https://eventime.ga/api/scanner';
 
   static const String login = '$baseUrl/login';
+  static const String logout = '$baseUrl/logout';
   static const String eventsAvenir = '$baseUrl/events-avenir';
   static const String eventsEnCours = '$baseUrl/events-en-cours';
   static const String eventStats = '$baseUrl/event-stats';

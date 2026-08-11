@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:eventime_scanner/Scanner/succes_pages.dart';
 import 'package:eventime_scanner/config/api_config.dart';
+import 'package:eventime_scanner/services/scanner_api_client.dart';
 
 class QRViewExample extends StatefulWidget {
   @override
@@ -140,13 +140,11 @@ class _QRViewExampleState extends State<QRViewExample> {
       print('Body JSON: ${jsonEncode(requestData)}');
       print('═══════════════════════════════════════');
       
-      var reponse = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(requestData),
-          )
-          .timeout(const Duration(seconds: 15)); // Ajouter un timeout
+      var reponse = await ScannerApiClient.post(
+        ApiConfig.scanTicket,
+        requestData,
+        context: context,
+      );
 
       // LOG: Afficher le code de statut et la réponse brute
       print('═══════════════════════════════════════');

@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../Login/login.dart';
 import '../config/api_config.dart';
+import '../services/scanner_api_client.dart';
 
 import 'details_pages.dart';
 import 'widgets/user_header.dart';
@@ -44,23 +42,18 @@ class _page_acceuilState extends State<page_acceuil> {
   }
 
   void _logout() async {
-    // Supprimer les données sauvegardées
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Supprime toutes les données stockées
-
-    // Navigate to login page and remove all previous routes
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const Connexion()),
-      (Route<dynamic> route) => false,
-    );
+    try {
+      await ScannerApiClient.post(ApiConfig.logout, {});
+    } catch (_) {}
+    await ScannerApiClient.clearSession(context: context);
   }
 
   Future<List<Map<String, dynamic>>> fetchEvents(String idAgent) async {
     try {
-      final response = await http.post(
-        Uri.parse(ApiConfig.eventsAvenir),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'id_agent': idAgent.toString()}),
+      final response = await ScannerApiClient.post(
+        ApiConfig.eventsAvenir,
+        {'id_agent': idAgent.toString()},
+        context: context,
       );
 
       if (response.statusCode == 200) {
@@ -106,13 +99,11 @@ class _page_acceuilState extends State<page_acceuil> {
   }
 
   void Evenements_en_cours(String idAgent) async {
-    final uri = Uri.parse(ApiConfig.eventsEnCours);
-
     try {
-      var response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'id_agent': idAgent}),
+      var response = await ScannerApiClient.post(
+        ApiConfig.eventsEnCours,
+        {'id_agent': idAgent},
+        context: context,
       );
 
       if (response.statusCode == 200) {
@@ -169,11 +160,10 @@ class _page_acceuilState extends State<page_acceuil> {
   /// Stats alignées dashboard : participants = vendus, remaining = non scannés.
   Future<void> fetchEventStats(idEvent) async {
     try {
-      final uri = Uri.parse(ApiConfig.eventStats);
-      var response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'event_id': idEvent.toString()}),
+      var response = await ScannerApiClient.post(
+        ApiConfig.eventStats,
+        {'event_id': idEvent.toString()},
+        context: context,
       );
 
       if (response.statusCode == 200) {

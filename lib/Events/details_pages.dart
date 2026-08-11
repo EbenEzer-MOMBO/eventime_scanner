@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../services/scanner_api_client.dart';
 import 'package:flutter/material.dart';
 import '../Scanner/Scanne_pages.dart';
 import '../config/api_config.dart';
@@ -27,10 +27,10 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
 
   Future<void> fetchEventStats(String idEvent) async {
     try {
-      final response = await http.post(
-        Uri.parse(ApiConfig.eventStats),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'event_id': idEvent}),
+      final response = await ScannerApiClient.post(
+        ApiConfig.eventStats,
+        {'event_id': idEvent},
+        context: context,
       );
 
       if (response.statusCode == 200) {
@@ -108,10 +108,10 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
     }
 
     try {
-      final response = await http.post(
-        Uri.parse(ApiConfig.participantsList),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'event_id': eventId}),
+      final response = await ScannerApiClient.post(
+        ApiConfig.participantsList,
+        {'event_id': eventId},
+        context: context,
       );
 
       if (response.statusCode == 200) {
