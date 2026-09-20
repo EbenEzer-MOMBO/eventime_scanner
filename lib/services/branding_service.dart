@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../config/branding.dart';
+import 'scanner_http.dart';
 
 class BrandingAssets {
   final String logoDark;
@@ -17,9 +17,10 @@ class BrandingService {
   /// Charge les logos depuis l'API ; fallback si indisponible.
   static Future<BrandingAssets> fetch() async {
     try {
-      final response = await http
-          .get(Uri.parse(ApiConfig.branding))
-          .timeout(const Duration(seconds: 10));
+      final response = await ScannerHttp.get(
+        ApiConfig.branding,
+        timeout: const Duration(seconds: 10),
+      );
 
       if (response.statusCode == 200) {
         final body = json.decode(response.body);

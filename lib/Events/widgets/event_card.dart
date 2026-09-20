@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../config/media_urls.dart';
 import '../details_pages.dart';
 
 // Widget pour une carte d'événement
@@ -75,11 +76,7 @@ class EventCard extends StatelessWidget {
                         top: Radius.circular(24),
                       ),
                       image: DecorationImage(
-                        image: NetworkImage(
-                          event['image'] != null
-                              ? 'https://version2.eventime.ga/public/storage/img-event/${event['image']}'
-                              : 'https://version2.eventime.ga/storage/app/public/users/organizer/default.jpeg',
-                        ),
+                        image: NetworkImage(MediaUrls.eventImage(event['image']?.toString())),
                         fit: BoxFit.cover,
                       ),
                     ),

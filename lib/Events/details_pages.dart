@@ -4,6 +4,11 @@ import '../services/scanner_api_client.dart';
 import 'package:flutter/material.dart';
 import '../Scanner/Scanne_pages.dart';
 import '../config/api_config.dart';
+import '../config/media_urls.dart';
+import '../services/offline_storage_service.dart';
+import '../services/offline_sync_service.dart';
+import '../services/scan_window.dart';
+import '../widgets/sync_queue_badge.dart';
 
 class Details extends StatefulWidget {
   var Plus;
@@ -36,19 +41,32 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true && data['data'] != null) {
+          final sold = data['data']['participants'];
+          final soldInt =
+              sold is int ? sold : int.tryParse(sold?.toString() ?? '') ?? 0;
+          await OfflineStorageService.saveSoldCount(idEvent, soldInt);
+          if (!mounted) {
+            return;
+          }
           setState(() {
-            participant = data['data']['participants']?.toString() ?? '0';
+            participant = soldInt.toString();
+            participantsCount = soldInt;
           });
           return;
         }
       }
-      setState(() {
-        participant = '0';
-      });
     } catch (_) {
-      setState(() {
-        participant = '0';
-      });
+      final sold = await OfflineStorageService.getSoldCount(idEvent);
+      if (!mounted) {
+        return;
+      }
+      if (sold != null) {
+        setState(() {
+          participant = sold.toString();
+          participantsCount = sold;
+        });
+        return;
+      }
     }
   }
 
@@ -63,7 +81,8 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
 
     searchController.addListener(_filterParticipants);
 
-    _softFetchTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+    unawaited(OfflineSyncService.instance.start());
+    _softFetchTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       fetchParticipants(eventId, soft: true);
       fetchEventStats(eventId);
     });
@@ -108,45 +127,49 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
     }
 
     try {
-      final response = await ScannerApiClient.post(
-        ApiConfig.participantsList,
-        {'event_id': eventId},
-        context: context,
+      final pulled = await OfflineSyncService.pullParticipants(
+        eventId,
+        full: !soft || participantsList.isEmpty,
       );
 
-      if (response.statusCode == 200) {
-        if (response.body.trim().isNotEmpty) {
-          Map<String, dynamic> jsonResponse = json.decode(response.body);
-
-          if (jsonResponse['success'] == true) {
-            var data = jsonResponse['data'];
-            if (data is List) {
-              final list = List<Map<String, dynamic>>.from(data);
-              final apiCount = jsonResponse['count'];
-              setState(() {
-                participantsList = list;
-                participantsCount =
-                    apiCount is int
-                        ? apiCount
-                        : int.tryParse(apiCount?.toString() ?? '') ??
-                            list.length;
-                isLoadingParticipants = false;
-              });
-              _filterParticipants();
-              return;
-            }
+      if (pulled != null) {
+        setState(() {
+          if (pulled.delta && participantsList.isNotEmpty) {
+            participantsList = _mergeParticipantRows(
+              participantsList,
+              pulled.items,
+            );
+          } else {
+            participantsList = pulled.items;
           }
-        }
+          if (pulled.count != null) {
+            participantsCount = pulled.count!;
+          }
+          isLoadingParticipants = false;
+        });
+        _filterParticipants();
+        return;
       }
     } catch (e) {
       print("Erreur lors du chargement des participants: $e");
     }
 
-    if (!soft) {
+    if (!soft && participantsList.isEmpty) {
+      final cached = await OfflineStorageService.getTickets(eventId);
+      final sold = await OfflineStorageService.getSoldCount(eventId);
+      if (cached.isNotEmpty || sold != null) {
+        final list = cached.values.toList();
+        setState(() {
+          participantsList = list;
+          if (sold != null) {
+            participantsCount = sold;
+          }
+          isLoadingParticipants = false;
+        });
+        _filterParticipants();
+        return;
+      }
       setState(() {
-        participantsList = [];
-        filteredParticipantsList = [];
-        participantsCount = 0;
         isLoadingParticipants = false;
       });
     } else {
@@ -154,6 +177,27 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
         isLoadingParticipants = false;
       });
     }
+  }
+
+  List<Map<String, dynamic>> _mergeParticipantRows(
+    List<Map<String, dynamic>> current,
+    List<Map<String, dynamic>> delta,
+  ) {
+    final byNumber = <String, Map<String, dynamic>>{};
+    for (final row in current) {
+      final number = row['ticket_number']?.toString() ?? '';
+      if (number.isNotEmpty) {
+        byNumber[number] = row;
+      }
+    }
+    for (final row in delta) {
+      final number = row['ticket_number']?.toString() ?? '';
+      if (number.isEmpty) {
+        continue;
+      }
+      byNumber[number] = row;
+    }
+    return byNumber.values.toList();
   }
 
   snackbar(text) {
@@ -173,8 +217,6 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
       widget.Plus['start_date'].toString(),
     );
     DateTime dateFin = DateTime.parse(widget.Plus['end_date'].toString());
-    DateTime finScan = heureSpecifique.add(const Duration(hours: 1));
-    DateTime maintenant = DateTime.now();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -190,7 +232,7 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
                 decoration: BoxDecoration(
                   image: DecorationImage(
                     image: NetworkImage(
-                      'https://version2.eventime.ga/public/storage/img-event/${widget.Plus['image']}',
+                      MediaUrls.eventImage(widget.Plus['image']?.toString()),
                     ),
                     fit: BoxFit.cover,
                   ),
@@ -320,35 +362,46 @@ class _DetailsState extends State<Details> with SingleTickerProviderStateMixin {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          if (condition(heureSpecifique, dureeEnHeures)) {
-            if (finScan.isBefore(maintenant)) {
-              snackbar('Les validations sont clôturées');
-            } else {
-              participant != '0'
-                  ? Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder:
-                          (context) => QRViewExample(
-                            id_event: widget.Plus['event_id'].toString(),
-                            evenement: widget.Plus['title'].toString(),
-                            id_agent: widget.id_agent,
-                          ),
-                    ),
-                  )
-                  : snackbar('Il n\'y a encore aucun participant');
-            }
-          } else {
-            snackbar(
-              "L'heure de la validation des tickets n'est pas encore venue !",
-            );
+          final windowMessage = ScanWindow.refusalMessage(
+            start: heureSpecifique,
+            end: dateFin,
+            scanHours: dureeEnHeures,
+          );
+          if (windowMessage != null) {
+            snackbar(windowMessage);
+            return;
           }
+          if (participant == '0' && participantsList.isEmpty) {
+            snackbar('Il n\'y a encore aucun participant');
+            return;
+          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => QRViewExample(
+                    id_event: widget.Plus['event_id'].toString(),
+                    evenement: widget.Plus['title'].toString(),
+                    id_agent: widget.id_agent,
+                    startDate: heureSpecifique,
+                    endDate: dateFin,
+                    scanHours: dureeEnHeures,
+                  ),
+            ),
+          );
         },
         backgroundColor: const Color(0xFF8BC34A),
         icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-        label: const Text(
-          'Scanner',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        label: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Scanner',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(width: 8),
+            SyncQueueBadge(),
+          ],
         ),
       ),
     );

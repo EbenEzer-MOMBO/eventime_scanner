@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../config/api_config.dart';
+import '../services/network_error.dart';
+import '../services/offline_storage_service.dart';
+import '../services/offline_sync_service.dart';
 import '../services/scanner_api_client.dart';
 
 import 'details_pages.dart';
@@ -31,14 +34,41 @@ class _page_acceuilState extends State<page_acceuil> {
   String tk_restant = "0";
 
   // Variables d'état
-  List<Map<String, dynamic>> upcomingEvents = []; // Liste des événements
+  List<Map<String, dynamic>> upcomingEvents = [];
+  Map<String, dynamic>? _currentEventPayload; // Liste des événements
 
   @override
   void initState() {
     super.initState();
-    // Chargement initial des données
-    fetchData();
-    Evenements_en_cours(widget.id_agent.toString());
+    _loadFromCacheThenNetwork();
+  }
+
+  Future<void> _loadFromCacheThenNetwork() async {
+    await _hydrateFromCache();
+    await fetchData();
+    await Evenements_en_cours(widget.id_agent.toString());
+    await OfflineSyncService.instance.start();
+  }
+
+  Future<void> _hydrateFromCache() async {
+    final agentId = widget.id_agent.toString();
+    final upcoming = await OfflineStorageService.getUpcomingEvents(agentId);
+    final current = await OfflineStorageService.getCurrentEvent(agentId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      upcomingEvents = upcoming;
+      _currentEventPayload = current;
+      if (current != null) {
+        id_evenement_en_cours = current['event_id']?.toString() ?? '';
+        image_evenement_en_cours = current['image']?.toString() ?? '';
+        nom_evenement_en_cours = current['title']?.toString() ?? '';
+        description_evenement_en_cours =
+            current['description']?.toString() ??
+            'Aucune description disponible';
+      }
+    });
   }
 
   void _logout() async {
@@ -48,12 +78,12 @@ class _page_acceuilState extends State<page_acceuil> {
     await ScannerApiClient.clearSession(context: context);
   }
 
-  Future<List<Map<String, dynamic>>> fetchEvents(String idAgent) async {
+  Future<List<Map<String, dynamic>>?> fetchEvents(String idAgent) async {
     try {
       final response = await ScannerApiClient.post(
         ApiConfig.eventsAvenir,
         {'id_agent': idAgent.toString()},
-        context: context,
+        timeout: const Duration(seconds: 25),
       );
 
       if (response.statusCode == 200) {
@@ -94,16 +124,16 @@ class _page_acceuilState extends State<page_acceuil> {
         return [];
       }
     } catch (e) {
-      return [];
+      return null;
     }
   }
 
-  void Evenements_en_cours(String idAgent) async {
+  Future<void> Evenements_en_cours(String idAgent) async {
     try {
       var response = await ScannerApiClient.post(
         ApiConfig.eventsEnCours,
         {'id_agent': idAgent},
-        context: context,
+        timeout: const Duration(seconds: 25),
       );
 
       if (response.statusCode == 200) {
@@ -124,22 +154,35 @@ class _page_acceuilState extends State<page_acceuil> {
               bool newEvent =
                   id_evenement_en_cours != eventData['event_id'].toString();
 
+              if (!mounted) {
+                return;
+              }
               setState(() {
                 id_evenement_en_cours = eventData['event_id'].toString();
                 image_evenement_en_cours = eventData['image'].toString();
                 nom_evenement_en_cours = eventData['title'].toString();
                 description_evenement_en_cours =
                     eventData['description'] ?? "Aucune description disponible";
+                _currentEventPayload = Map<String, dynamic>.from(eventData);
               });
 
               if (newEvent) {
                 fetchEventStats(id_evenement_en_cours);
-                snackbar("Événement en cours: $nom_evenement_en_cours");
               }
+              await OfflineStorageService.saveCurrentEvent(idAgent, {
+                'event_id': id_evenement_en_cours,
+                'image': image_evenement_en_cours,
+                'title': nom_evenement_en_cours,
+                'description': description_evenement_en_cours,
+                'start_date': eventData['start_date'],
+                'end_date': eventData['end_date'],
+                'scan_date': eventData['scan_date'],
+              });
             } else {
               setState(() {
                 id_evenement_en_cours = "";
               });
+              await OfflineStorageService.saveCurrentEvent(idAgent, null);
             }
           } else {
             setState(() {
@@ -147,13 +190,15 @@ class _page_acceuilState extends State<page_acceuil> {
             });
           }
         } catch (e) {
-          snackbar("Erreur de format de données: $e");
+          snackbar("Erreur de format de données");
         }
       } else {
-        snackbar("Erreur: ${response.statusCode}");
+        snackbar("Impossible de charger l'événement en cours");
       }
     } catch (e) {
-      snackbar("Erreur: $e");
+      if (id_evenement_en_cours.isEmpty) {
+        snackbar(networkErrorMessage(e));
+      }
     }
   }
 
@@ -169,43 +214,79 @@ class _page_acceuilState extends State<page_acceuil> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true && data['data'] != null) {
+          final sold = data['data']['participants'];
+          final soldInt =
+              sold is int ? sold : int.tryParse(sold?.toString() ?? '') ?? 0;
+          await OfflineStorageService.saveSoldCount(
+            idEvent.toString(),
+            soldInt,
+          );
+          if (!mounted) {
+            return;
+          }
           setState(() {
-            participant = data['data']['participants']?.toString() ?? '0';
+            participant = soldInt.toString();
             tk_restant = data['data']['remaining']?.toString() ?? '0';
           });
           return;
         }
       }
-      setState(() {
-        participant = '0';
-        tk_restant = '0';
-      });
+      final cached = await OfflineStorageService.getSoldCount(
+        idEvent.toString(),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (cached != null) {
+        setState(() {
+          participant = cached.toString();
+        });
+      }
     } catch (e) {
-      setState(() {
-        participant = '0';
-        tk_restant = '0';
-      });
+      final cached = await OfflineStorageService.getSoldCount(
+        idEvent.toString(),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (cached != null) {
+        setState(() {
+          participant = cached.toString();
+        });
+      }
     }
   }
 
   Future<void> fetchData() async {
     try {
-      // Utiliser fetchEvents pour récupérer les événements
-      List<Map<String, dynamic>> events = await fetchEvents(
-        widget.id_agent.toString(),
-      );
-
-      // Mettre à jour la liste des événements
+      final events = await fetchEvents(widget.id_agent.toString());
+      if (events == null) {
+        if (upcomingEvents.isEmpty) {
+          snackbar('Connexion trop lente. Réessayez.');
+        }
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
       setState(() {
         upcomingEvents = events;
       });
+      await OfflineStorageService.saveUpcomingEvents(
+        widget.id_agent.toString(),
+        events,
+      );
     } catch (e) {
-      // Afficher un message d'erreur à l'utilisateur
-      snackbar("Impossible de charger les événements");
+      if (upcomingEvents.isEmpty) {
+        snackbar(networkErrorMessage(e));
+      }
     }
   }
 
   snackbar(text) {
+    if (!mounted) {
+      return;
+    }
     final snackBar = SnackBar(
       backgroundColor: Colors.redAccent,
       content: Text(text, style: const TextStyle(color: Colors.white)),
@@ -258,17 +339,10 @@ class _page_acceuilState extends State<page_acceuil> {
   }
 
   void _navigateToEventDetails() {
-    // Chercher l'événement dans la liste pour obtenir toutes ses données
-    Map<String, dynamic>? currentEvent;
-    for (var event in upcomingEvents) {
-      if (event['event_id'].toString() == id_evenement_en_cours) {
-        currentEvent = event;
-        break;
-      }
-    }
+    final currentEvent = _currentEventPayload;
 
     Map<String, dynamic> eventDetails = {
-      'event_id': id_evenement_en_cours, // Garder comme String pour l'API
+      'event_id': id_evenement_en_cours,
       'title': nom_evenement_en_cours,
       'image': image_evenement_en_cours,
       'description':

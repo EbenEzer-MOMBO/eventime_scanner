@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import '../config/api_config.dart';
+import 'scanner_http.dart';
 
 class AppVersionInfo {
   final String versionName;
@@ -45,9 +45,10 @@ class VersionCheckService {
     final localBuild = await _localBuildNumber();
 
     try {
-      final response = await http
-          .get(Uri.parse(ApiConfig.appVersion))
-          .timeout(const Duration(seconds: 12));
+      final response = await ScannerHttp.get(
+        ApiConfig.appVersion,
+        timeout: const Duration(seconds: 12),
+      );
 
       if (response.statusCode != 200) {
         return VersionCheckResult(

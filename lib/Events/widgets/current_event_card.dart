@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import '../../config/media_urls.dart';
 
 // Widget pour l'événement en cours
 class CurrentEventCard extends StatelessWidget {
@@ -129,7 +130,7 @@ class CurrentEventCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     image: DecorationImage(
                       image: NetworkImage(
-                        "https://version2.eventime.ga/public/storage/img-event/$imageEvenementEnCours",
+                        MediaUrls.eventImage(imageEvenementEnCours),
                       ),
                       fit: BoxFit.cover,
                     ),

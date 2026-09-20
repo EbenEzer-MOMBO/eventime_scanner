@@ -1,12 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Login/login.dart';
 import 'Events/page_acceuil.dart';
+import 'services/prefer_ipv4_http_overrides.dart';
 import 'services/version_check_service.dart';
 import 'widgets/force_update_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = PreferIpv4HttpOverrides();
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final idAgent = prefs.getString('id_agent');
   final accessToken = prefs.getString('access_token');

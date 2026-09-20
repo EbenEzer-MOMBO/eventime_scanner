@@ -1,11 +1,13 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Events/page_acceuil.dart';
 import '../config/api_config.dart';
 import '../config/branding.dart';
 import '../services/branding_service.dart';
+import '../services/network_error.dart';
+import '../services/scanner_http.dart';
 
 class Connexion extends StatefulWidget {
   const Connexion({super.key});
@@ -66,6 +68,16 @@ class _ConnexionState extends State<Connexion> {
     prefs.setString('saved_password', password);
   }
 
+  String? _messageFromBody(String body) {
+    try {
+      final data = json.decode(body);
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   snackbar(text) {
     final snackBar = SnackBar(
       backgroundColor: Colors.redAccent,
@@ -88,15 +100,13 @@ class _ConnexionState extends State<Connexion> {
         return;
       }
 
-      final uri = Uri.parse(ApiConfig.login);
+      var reponse = await ScannerHttp.postJson(
+        ApiConfig.login,
+        {'matricule': email, 'code': password},
+        timeout: const Duration(seconds: 20),
+      );
 
-      var reponse = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'matricule': email, 'code': password}),
-          )
-          .timeout(const Duration(seconds: 15));
+      debugPrint('LOGIN status=${reponse.statusCode} body=${reponse.body}');
 
       if (reponse.statusCode == 200) {
         final data = json.decode(reponse.body);
@@ -143,14 +153,23 @@ class _ConnexionState extends State<Connexion> {
         }
       } else if (reponse.statusCode == 401) {
         snackbar('Compte inconnu');
+      } else if (reponse.statusCode == 422) {
+        snackbar(
+          _messageFromBody(reponse.body) ?? 'Données de connexion invalides',
+        );
+      } else if (reponse.statusCode == 403) {
+        snackbar('Accès bloqué (403). Pare-feu ou Cloudflare.');
       } else {
-        snackbar('Erreur de connexion');
+        snackbar(
+          _messageFromBody(reponse.body) ??
+              'Erreur de connexion (${reponse.statusCode})',
+        );
       }
       setState(() {
         chargement = false;
       });
     } catch (e) {
-      snackbar('Erreur de connexion: vérifiez votre connexion internet');
+      snackbar(networkErrorMessage(e));
       setState(() {
         chargement = false;
       });

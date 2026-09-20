@@ -9,6 +9,7 @@ class ApiConfig {
   static const String eventStats = '$baseUrl/event-stats';
   static const String participantsList = '$baseUrl/participants-list';
   static const String scanTicket = '$baseUrl/scan-ticket';
+  static const String scanTicketBatch = '$baseUrl/scan-ticket-batch';
   static const String appVersion = '$baseUrl/app-version';
   static const String branding = '$baseUrl/branding';
 }
